@@ -166,6 +166,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, ...results, timestamp: now.toISOString() })
   } catch (err) {
     console.error('Cron error:', err)
-    return res.status(500).json({ error: err.message })\
+    return res.status(500).json({ error: err.message })
   }
 }
