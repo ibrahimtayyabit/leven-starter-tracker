@@ -572,10 +572,35 @@ export default function Home() {
   async function registerEmail() {
     if (!emailInput.trim() || !emailInput.includes('@')) { showToast('Please enter a valid email'); return }
     setSaving(true)
+    const trimmed = emailInput.trim().toLowerCase()
+
+    // Try to insert new user
     const { data, error } = await supabase.from('users')
-      .insert({ email: emailInput.trim(), current_mode: null, current_step: 0 })
+      .insert({ email: trimmed, current_mode: null, current_step: 0 })
       .select().single()
-    if (error) { showToast('Error saving — try again'); setSaving(false); return }
+
+    if (error) {
+      // Duplicate email — look up existing user and log them back in
+      if (error.code === '23505' || (error.message && (error.message.includes('unique') || error.message.includes('duplicate')))) {
+        const { data: existing } = await supabase.from('users').select('*').eq('email', trimmed).single()
+        if (existing) {
+          localStorage.setItem('leven_uid', existing.id)
+          setUserId(existing.id)
+          setEmail(existing.email)
+          setMode(existing.current_mode)
+          setCurrentStep(existing.current_step || 0)
+          setShowEmailSetup(false)
+          showToast('Welcome back! Your data has been restored 🌾')
+          setSaving(false)
+          loadUser(existing.id)
+          return
+        }
+      }
+      showToast('Error saving — try again')
+      setSaving(false)
+      return
+    }
+
     localStorage.setItem('leven_uid', data.id)
     setUserId(data.id); setEmail(data.email); setShowEmailSetup(false)
     await fetch('/api/welcome', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: data.email }) })
