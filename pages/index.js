@@ -603,7 +603,7 @@ export default function Home() {
 
     localStorage.setItem('leven_uid', data.id)
     setUserId(data.id); setEmail(data.email); setShowEmailSetup(false)
-    await fetch('/api/welcome', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: data.email }) })
+    await fetch('/api/welcome', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: data.email, userId: data.id }) })
     showToast('Welcome! Reminders are now active 📬')
     setSaving(false)
   }
