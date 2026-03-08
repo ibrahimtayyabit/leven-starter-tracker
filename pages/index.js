@@ -625,14 +625,31 @@ export default function Home() {
       const w = parseFloat(starterWeight)
       amounts = { starter: w, water: w, flour: w, total: w*3 }
     }
+
+    // Convert user-inputted HH:MM to a proper UTC timestamp.
+    // The time picker shows local time, so we reconstruct it using today's
+    // local date + the inputted HH:MM, giving us the correct UTC value.
+    let loggedAt = new Date().toISOString() // fallback: now
+    if (timeStr && /^\d{2}:\d{2}$/.test(timeStr)) {
+      const [h, m] = timeStr.split(':').map(Number)
+      const local = new Date()
+      local.setHours(h, m, 0, 0)
+      // If the inputted time is more than 1 hour in the future, assume it was yesterday
+      if (local.getTime() > Date.now() + 3600000) {
+        local.setDate(local.getDate() - 1)
+      }
+      loggedAt = local.toISOString()
+    }
+
     await supabase.from('entries').insert({
       user_id: userId, mode, step_index: currentStep, step_title: step.title,
       observation: obs||null, note: note||null, amounts, logged_time: timeStr,
+      logged_at: loggedAt,
       check_window_min: step.checkWindow?.[0]||null, check_window_max: step.checkWindow?.[1]||null,
     })
     const nextStep = currentStep + 1
     setCurrentStep(nextStep)
-    await supabase.from('users').update({ current_mode: mode, current_step: nextStep, last_entry_at: new Date().toISOString() }).eq('id', userId)
+    await supabase.from('users').update({ current_mode: mode, current_step: nextStep, last_entry_at: loggedAt }).eq('id', userId)
     const { data: newEntries } = await supabase.from('entries').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(15)
     setEntries(newEntries||[]); calcStreak(newEntries||[])
     setObs(''); setNote(''); setStarterWeight('')

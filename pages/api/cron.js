@@ -4,43 +4,17 @@ import { MODES } from '../../lib/modes'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CRON ENDPOINT
-// Called by cronjob.org every minute (or however you configure it).
+// Called by cronjob.org every minute.
 //
 // cronjob.org setup:
 //   URL:    https://your-app.vercel.app/api/cron?secret=YOUR_CRON_SECRET
 //   Method: GET
 //   Every:  1 minute (or 5 min to save quota)
 //
-// TIMING: Uses the user's inputted logged_time (e.g. "14:00") combined with
-// the entry's created_at date to calculate elapsed time — not the server
-// timestamp. So if someone fed at 2pm but logged it at 6pm, reminders fire
-// relative to 2pm, not 6pm.
+// TIMING: Uses logged_at — a proper UTC timestamp computed from the user's
+// inputted HH:MM in their local timezone. Accurate regardless of where the
+// user is located.
 // ─────────────────────────────────────────────────────────────────────────────
-
-// Reconstruct a real Date from a logged_time string ("HH:MM") and a created_at
-// timestamp. Uses the date portion of created_at but substitutes the HH:MM
-// the user actually entered. Falls back to created_at if logged_time is missing.
-function getActualEntryTime(loggedTime, createdAt) {
-  if (!loggedTime || !/^\d{2}:\d{2}$/.test(loggedTime)) {
-    return new Date(createdAt)
-  }
-  const base = new Date(createdAt)
-  const [hours, minutes] = loggedTime.split(':').map(Number)
-
-  // Build a date using the UTC date from created_at but with the user's HH:MM.
-  // We treat logged_time as local time (it was entered in the user's browser),
-  // so we use local date math here.
-  const result = new Date(createdAt)
-  result.setHours(hours, minutes, 0, 0)
-
-  // Edge case: if the logged time is significantly ahead of created_at (e.g.
-  // user set time to 11pm but it's actually past midnight now), roll back a day.
-  if (result.getTime() - base.getTime() > 6 * 3600000) {
-    result.setDate(result.getDate() - 1)
-  }
-
-  return result
-}
 
 export default async function handler(req, res) {
   const authHeader  = req.headers.authorization
@@ -66,7 +40,7 @@ export default async function handler(req, res) {
   try {
     const { data: users, error: usersError } = await supabaseAdmin
       .from('users')
-      .select('id, email, current_mode, current_step, remind_window_start, remind_midpoint, remind_overdue')
+      .select('id, email, current_mode, current_step, last_entry_at, remind_window_start, remind_midpoint, remind_overdue')
       .eq('reminders_active', true)
       .not('current_mode', 'is', null)
 
@@ -83,21 +57,10 @@ export default async function handler(req, res) {
       const stepWindow = windows[stepIndex]
       if (!stepWindow) { results.skipped++; continue }
 
-      // Fetch the most recent entry for this user at this step
-      // to get the user-inputted logged_time
-      const { data: latestEntries } = await supabaseAdmin
-        .from('entries')
-        .select('logged_time, created_at')
-        .eq('user_id', user.id)
-        .eq('step_index', stepIndex - 1 < 0 ? 0 : stepIndex - 1)
-        .order('created_at', { ascending: false })
-        .limit(1)
-
-      // Actually we want the entry for the step the user just completed
-      // (stepIndex - 1), since current_step is already incremented after logging
+      // Fetch the most recent entry to get logged_at (user's actual feed time in UTC)
       const { data: recentEntry } = await supabaseAdmin
         .from('entries')
-        .select('logged_time, created_at')
+        .select('logged_at, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -105,14 +68,13 @@ export default async function handler(req, res) {
 
       if (!recentEntry) { results.skipped++; continue }
 
-      // Use the user's inputted time, not server receipt time
-      const actualEntryTime = getActualEntryTime(recentEntry.logged_time, recentEntry.created_at)
-      const hoursElapsed    = (now - actualEntryTime) / 3600000
+      // Use logged_at if available (new entries), fall back to last_entry_at for old entries
+      const referenceTime = recentEntry.logged_at || user.last_entry_at || recentEntry.created_at
+      const hoursElapsed  = (now - new Date(referenceTime)) / 3600000
 
       const [minH, maxH] = stepWindow
       const midH         = (minH + maxH) / 2
 
-      // Determine what reminder to send (if any)
       let reminderType = null
       if (user.remind_window_start !== false && hoursElapsed >= minH && hoursElapsed < midH) {
         reminderType = REMINDER_TYPES.WINDOW_START
