@@ -9,7 +9,8 @@ export const config = { maxDuration: 60 }
 export default async function handler(req, res) {
   // Verify this is called by Vercel Cron (or manually with the secret)
   const authHeader = req.headers.authorization
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const querySecret = req.query.secret
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}` && querySecret !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
