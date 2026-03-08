@@ -1,26 +1,42 @@
-import { supabaseAdmin } from '../../lib/supabase'
+import { getSupabaseAdmin } from '../../lib/supabase'
 import { sendReminder, CHECK_WINDOWS, REMINDER_TYPES } from '../../lib/email'
+import { MODES } from '../../lib/modes'
 
-// Vercel Cron: runs every hour (see vercel.json)
-// Checks every active user, fires reminders based on their last entry + check window
-
-export const config = { maxDuration: 60 }
+// ─────────────────────────────────────────────────────────────────────────────
+// CRON ENDPOINT
+// Called by cronjob.org every minute (or however you configure it).
+//
+// cronjob.org setup:
+//   URL:    https://your-app.vercel.app/api/cron?secret=YOUR_CRON_SECRET
+//   Method: GET
+//   Every:  1 minute (or 5 min to save quota)
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
-  // Verify this is called by Vercel Cron (or manually with the secret)
-  const authHeader = req.headers.authorization
-  const querySecret = req.query.secret
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}` && querySecret !== process.env.CRON_SECRET) {
+  // Auth check — supports both Authorization header AND ?secret= query param
+  // cronjob.org uses the query param approach (easier to configure)
+  const authHeader   = req.headers.authorization
+  const querySecret  = req.query.secret
+  const validBearer  = authHeader === `Bearer ${process.env.CRON_SECRET}`
+  const validQuery   = querySecret && querySecret === process.env.CRON_SECRET
+
+  if (!validBearer && !validQuery) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL
-  const now = new Date()
+  let supabaseAdmin
+  try {
+    supabaseAdmin = getSupabaseAdmin()
+  } catch (e) {
+    return res.status(500).json({ error: e.message })
+  }
+
+  const appUrl     = process.env.NEXT_PUBLIC_APP_URL
+  const now        = new Date()
   const currentHour = now.getHours()
-  const results = { checked: 0, sent: 0, skipped: 0, errors: 0 }
+  const results    = { checked: 0, sent: 0, skipped: 0, errors: 0 }
 
   try {
-    // Fetch all active users who have reminders enabled and have a current mode set
     const { data: users, error: usersError } = await supabaseAdmin
       .from('users')
       .select('id, email, current_mode, current_step, last_entry_at, quiet_hours_start, quiet_hours_end, remind_window_start, remind_midpoint, remind_overdue')
@@ -36,7 +52,7 @@ export default async function handler(req, res) {
       // Quiet hours check (default 22–7)
       const quietStart = user.quiet_hours_start ?? 22
       const quietEnd   = user.quiet_hours_end   ?? 7
-      const inQuiet = quietStart > quietEnd
+      const inQuiet    = quietStart > quietEnd
         ? (currentHour >= quietStart || currentHour < quietEnd)
         : (currentHour >= quietStart && currentHour < quietEnd)
       if (inQuiet) { results.skipped++; continue }
@@ -50,13 +66,12 @@ export default async function handler(req, res) {
       if (!stepWindow) { results.skipped++; continue }
 
       const [minH, maxH] = stepWindow
-      const midH = (minH + maxH) / 2
-      const lastEntry = new Date(user.last_entry_at)
+      const midH         = (minH + maxH) / 2
+      const lastEntry    = new Date(user.last_entry_at)
       const hoursElapsed = (now - lastEntry) / 3600000
 
-      // Determine what reminder to fire, if any
+      // Determine what reminder to send (if any)
       let reminderType = null
-
       if (user.remind_window_start !== false && hoursElapsed >= minH && hoursElapsed < midH) {
         reminderType = REMINDER_TYPES.WINDOW_START
       } else if (user.remind_midpoint !== false && hoursElapsed >= midH && hoursElapsed < maxH) {
@@ -64,10 +79,9 @@ export default async function handler(req, res) {
       } else if (user.remind_overdue !== false && hoursElapsed >= maxH) {
         reminderType = REMINDER_TYPES.OVERDUE
       }
-
       if (!reminderType) { results.skipped++; continue }
 
-      // Check if we already sent this reminder type in the last window (prevents duplicates)
+      // Dedupe: don't resend the same reminder type within the window period
       const windowHours = maxH + 1
       const cutoff = new Date(now.getTime() - windowHours * 3600000).toISOString()
       const { data: recentEmails } = await supabaseAdmin
@@ -80,33 +94,20 @@ export default async function handler(req, res) {
 
       if (recentEmails && recentEmails.length > 0) { results.skipped++; continue }
 
-      // Get the step title for the email
-      const { MODES } = await import('../../lib/modes')
-      const modeData   = MODES[mode]
-      const stepData   = modeData?.steps?.[stepIndex]
-      const stepTitle  = stepData?.title || `Step ${stepIndex + 1}`
+      // Get step title for email
+      const modeData  = MODES[mode]
+      const stepData  = modeData?.steps?.[stepIndex]
+      const stepTitle = stepData?.title || `Step ${stepIndex + 1}`
 
       try {
         await sendReminder({
-          to:         user.email,
-          type:       reminderType,
-          mode,
-          stepTitle,
-          stepIndex,
-          hoursAgo:   Math.round(hoursElapsed),
-          appUrl,
+          to: user.email, type: reminderType, mode, stepTitle,
+          stepIndex, hoursAgo: Math.round(hoursElapsed), appUrl,
         })
-
-        // Log the sent reminder
         await supabaseAdmin.from('reminder_log').insert({
-          user_id:       user.id,
-          reminder_type: reminderType,
-          mode,
-          step_index:    stepIndex,
-          sent_at:       now.toISOString(),
+          user_id: user.id, reminder_type: reminderType,
+          mode, step_index: stepIndex, sent_at: now.toISOString(),
         })
-
-        // Mark the most recent entry as having received an email
         await supabaseAdmin
           .from('entries')
           .update({ email_sent: true })
@@ -114,7 +115,6 @@ export default async function handler(req, res) {
           .eq('step_index', stepIndex)
           .order('created_at', { ascending: false })
           .limit(1)
-
         results.sent++
       } catch (emailError) {
         console.error(`Email failed for user ${user.id}:`, emailError)
@@ -122,9 +122,8 @@ export default async function handler(req, res) {
       }
     }
 
-    console.log(`Cron complete:`, results)
+    console.log('Cron complete:', results)
     return res.status(200).json({ ok: true, ...results, timestamp: now.toISOString() })
-
   } catch (err) {
     console.error('Cron error:', err)
     return res.status(500).json({ error: err.message })
