@@ -33,13 +33,12 @@ export default async function handler(req, res) {
 
   const appUrl     = process.env.NEXT_PUBLIC_APP_URL
   const now        = new Date()
-  const currentHour = now.getHours()
   const results    = { checked: 0, sent: 0, skipped: 0, errors: 0 }
 
   try {
     const { data: users, error: usersError } = await supabaseAdmin
       .from('users')
-      .select('id, email, current_mode, current_step, last_entry_at, quiet_hours_start, quiet_hours_end, remind_window_start, remind_midpoint, remind_overdue')
+      .select('id, email, current_mode, current_step, last_entry_at, remind_window_start, remind_midpoint, remind_overdue')
       .eq('reminders_active', true)
       .not('current_mode', 'is', null)
       .not('last_entry_at', 'is', null)
@@ -49,13 +48,7 @@ export default async function handler(req, res) {
     for (const user of users || []) {
       results.checked++
 
-      // Quiet hours check (default 22–7)
-      const quietStart = user.quiet_hours_start ?? 22
-      const quietEnd   = user.quiet_hours_end   ?? 7
-      const inQuiet    = quietStart > quietEnd
-        ? (currentHour >= quietStart || currentHour < quietEnd)
-        : (currentHour >= quietStart && currentHour < quietEnd)
-      if (inQuiet) { results.skipped++; continue }
+      // Quiet hours removed — reminders fire any time of day
 
       const mode      = user.current_mode
       const stepIndex = user.current_step || 0
