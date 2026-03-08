@@ -16,8 +16,8 @@ create table if not exists users (
   remind_window_start boolean default true,        -- "time to check" email
   remind_midpoint     boolean default true,        -- "feed now" email
   remind_overdue      boolean default true,        -- overdue alert email
-  quiet_hours_start   int default 22,              -- hour (0–23), default 10pm
-  quiet_hours_end     int default 7,               -- hour (0–23), default 7am
+  quiet_hours_start   int default 0,              -- hour (0–23), default 10pm
+  quiet_hours_end     int default 0,               -- hour (0–23), default 7am
   created_at          timestamptz default now()
 );
 
