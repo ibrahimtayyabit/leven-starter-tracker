@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import ReactDOM from 'react-dom'
 import { supabase } from '../lib/supabase'
 import Head from 'next/head'
 
@@ -538,6 +539,15 @@ export default function Home() {
     const saved = typeof window !== 'undefined' ? localStorage.getItem('leven_uid') : null
     if (saved) loadUser(saved)
     else setShowEmailSetup(true)
+
+    function handleVisibility() {
+      if (document.visibilityState === 'visible') {
+        const uid = localStorage.getItem('leven_uid')
+        if (uid) loadUser(uid)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
   }, [])
 
   async function loadUser(uid) {
@@ -550,8 +560,13 @@ export default function Home() {
       .limit(20, { foreignTable: 'entries' })
       .single()
     if (data) {
-      setUserId(data.id); setEmail(data.email); setMode(data.current_mode)
-      setCurrentStep(data.current_step ?? 0); setEntries(data.entries || [])
+      ReactDOM.unstable_batchedUpdates(() => {
+        setUserId(data.id)
+        setEmail(data.email)
+        setMode(data.current_mode)
+        setCurrentStep(data.current_step ?? 0)
+        setEntries(data.entries || [])
+      })
       calcStreak(data.entries || [])
     } else {
       localStorage.removeItem('leven_uid'); setShowEmailSetup(true)
@@ -585,10 +600,6 @@ export default function Home() {
         const { data: existing } = await supabase.from('users').select('*').eq('email', trimmed).single()
         if (existing) {
           localStorage.setItem('leven_uid', existing.id)
-          setUserId(existing.id)
-          setEmail(existing.email)
-          setMode(existing.current_mode)
-          setCurrentStep(existing.current_step ?? 0)
           setShowEmailSetup(false)
           showToast('Welcome back! Your data has been restored 🌾')
           setSaving(false)
@@ -739,7 +750,7 @@ export default function Home() {
 
           {mode && <Advice mode={mode} />}
 
-          {currentMode && currentStep !== null && (
+          {currentMode && currentStep !== null && !loading && (
             <>
               <div className="sec-label">{currentMode.label} — Steps</div>
               {currentMode.steps.map((step, i) => (
