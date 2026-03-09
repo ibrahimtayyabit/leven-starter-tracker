@@ -670,15 +670,25 @@ export default function Home() {
       loggedAt = local.toISOString()
     }
 
-    await supabase.from('entries').insert({
+    const { error: entryError } = await supabase.from('entries').insert({
       user_id: userId, mode, step_index: currentStep, step_title: step.title,
       observation: obs||null, note: note||null, amounts, logged_time: timeStr,
       logged_at: loggedAt,
       check_window_min: step.checkWindow?.[0]||null, check_window_max: step.checkWindow?.[1]||null,
     })
+    if (entryError) {
+      console.error('Entry insert failed:', entryError)
+      showToast('Error saving entry — check console')
+      setSaving(false)
+      return
+    }
     const nextStep = currentStep + 1
     setCurrentStep(nextStep)
-    await supabase.from('users').update({ current_mode: mode, current_step: nextStep, last_entry_at: loggedAt }).eq('id', userId)
+    const { error: userError } = await supabase.from('users').update({ current_mode: mode, current_step: nextStep, last_entry_at: loggedAt }).eq('id', userId)
+    if (userError) {
+      console.error('User step update failed:', userError)
+      showToast('Step logged but progress save failed — check RLS policies')
+    }
     const { data: newEntries } = await supabase.from('entries').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(15)
     setEntries(newEntries||[]); calcStreak(newEntries||[])
     setObs(''); setNote(''); setStarterWeight('')
