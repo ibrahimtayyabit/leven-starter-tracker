@@ -638,9 +638,32 @@ export default function Home() {
   }
 
   async function selectMode(m) {
-    const newStep = mode !== m ? 0 : (currentStep ?? 0)
-    setMode(m); setCurrentStep(newStep)
-    if (userId) await supabase.from('users').update({ current_mode: m, current_step: newStep }).eq('id', userId)
+    if (mode === m) { showToast(MODES[m].label + ' selected'); return }
+
+    // Switching to a different mode — fetch the real saved step for that mode
+    // from the user's entries rather than blindly resetting to 0.
+    setMode(m)
+    setCurrentStep(null) // show loading state while we fetch
+
+    let resolvedStep = 0
+    if (userId) {
+      const { data: lastEntry } = await supabase
+        .from('entries')
+        .select('step_index')
+        .eq('user_id', userId)
+        .eq('mode', m)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      if (lastEntry) resolvedStep = lastEntry.step_index + 1
+    }
+
+    // Cap at the last step (don't go past "all complete")
+    const maxStep = MODES[m].steps.length
+    resolvedStep = Math.min(resolvedStep, maxStep)
+
+    setCurrentStep(resolvedStep)
+    if (userId) await supabase.from('users').update({ current_mode: m, current_step: resolvedStep }).eq('id', userId)
     showToast(MODES[m].label + ' selected')
   }
 
