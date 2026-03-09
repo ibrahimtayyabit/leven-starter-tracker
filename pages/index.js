@@ -523,7 +523,7 @@ export default function Home() {
   const [starterWeight, setStarterWeight] = useState('')
   const [timeStr, setTimeStr]           = useState('')
   const [toast, setToast]               = useState('')
-  const [loading, setLoading]           = useState(false)
+  const [loading, setLoading]           = useState(true)
   const [saving, setSaving]             = useState(false)
   const [showEmailSetup, setShowEmailSetup] = useState(false)
   const [streak, setStreak]             = useState(0)
@@ -706,7 +706,7 @@ export default function Home() {
       </nav>
 
       {/* ══ TRACKER TAB ══ */}
-      {tab === 'tracker' && (
+      <div style={{display: tab === 'tracker' ? 'block' : 'none'}}>{(() => (
         <main className="page">
           {loading && <div style={{textAlign:'center',padding:'2rem',color:'var(--mid)',fontSize:'.8rem'}}>Loading…</div>}
 
@@ -831,13 +831,13 @@ export default function Home() {
 
           {email && <div style={{textAlign:'center',marginTop:'2rem'}}><button onClick={unsubscribe} style={{background:'none',border:'none',color:'var(--mid)',fontSize:'.7rem',cursor:'pointer',textDecoration:'underline'}}>Pause email reminders</button></div>}
         </main>
-      )}
+      ))()}</div>
 
       {/* ══ JAR WEIGHT TAB ══ */}
-      {tab === 'jar' && <JarWeightTab />}
+      <div style={{display: tab === 'jar' ? 'block' : 'none'}}><JarWeightTab /></div>
 
       {/* ══ RECIPES TAB ══ */}
-      {tab === 'recipes' && (
+      <div style={{display: tab === 'recipes' ? 'block' : 'none'}}>
         <main className="page">
           <div className="r-intro">
             <h2>🌾 Sarver Farms Recipe Collection</h2>
@@ -882,7 +882,7 @@ export default function Home() {
             </div>
           ))}
         </main>
-      )}
+      </div>
 
       <div className={`toast${toast?' show':''}`}>{toast}</div>
     </>
