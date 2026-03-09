@@ -516,7 +516,7 @@ export default function Home() {
   const [emailInput, setEmailInput]     = useState('')
   const [userId, setUserId]             = useState(null)
   const [mode, setMode]                 = useState(null)
-  const [currentStep, setCurrentStep]   = useState(0)
+  const [currentStep, setCurrentStep]   = useState(null)
   const [entries, setEntries]           = useState([])
   const [obs, setObs]                   = useState('')
   const [note, setNote]                 = useState('')
@@ -526,7 +526,7 @@ export default function Home() {
   const [loading, setLoading]           = useState(true)
   const [saving, setSaving]             = useState(false)
   const [showEmailSetup, setShowEmailSetup] = useState(false)
-  const [streak, setStreak]             = useState(0)
+  const [streak, setStreak]             = useState(null)
   const [openRecipe, setOpenRecipe]     = useState(null)
 
   useEffect(() => {
@@ -551,7 +551,7 @@ export default function Home() {
       .single()
     if (data) {
       setUserId(data.id); setEmail(data.email); setMode(data.current_mode)
-      setCurrentStep(data.current_step || 0); setEntries(data.entries || [])
+      setCurrentStep(data.current_step ?? 0); setEntries(data.entries || [])
       calcStreak(data.entries || [])
     } else {
       localStorage.removeItem('leven_uid'); setShowEmailSetup(true)
@@ -739,7 +739,7 @@ export default function Home() {
 
           {mode && <Advice mode={mode} />}
 
-          {currentMode && (
+          {currentMode && currentStep !== null && (
             <>
               <div className="sec-label">{currentMode.label} — Steps</div>
               {currentMode.steps.map((step, i) => (
