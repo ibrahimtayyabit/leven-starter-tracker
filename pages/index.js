@@ -840,10 +840,15 @@ export default function Home() {
                   const isNoDiscard = currentStepData.title.toLowerCase().includes('no discard')
                   const isDiscard   = !isNoDiscard && currentStepData.title.toLowerCase().includes('discard')
                   const isFeed      = currentStepData.title.toLowerCase().includes('feed') || currentStepData.title.toLowerCase().includes('revive')
-                  // For normal feed: discard half first, then feed the remaining
-                  // For NO discard feed: feed based on full starter weight
-                  const afterDiscard = isNoDiscard ? computed : (computed && half ? computed - half : null)
-                  const feedBase     = afterDiscard  // water and flour match this amount
+                  // afterDiscard logic:
+                  // - isDiscard + isFeed (e.g. fridge "Feed 1:1:1 then refrigerate"): discard half, feed remaining
+                  // - isDiscard only (e.g. "Discard half your starter"): discard half, show target weight
+                  // - isFeed only, no discard (e.g. Counter "Feed 1:1:1"): NO discard, feed full starter weight
+                  // - isNoDiscard (explicitly "NO discard" in title): feed full starter, no discard step
+                  const afterDiscard = (isNoDiscard || (!isDiscard && isFeed))
+                    ? computed                                    // feed full starter, no discard
+                    : (computed && half ? computed - half : null) // discard half first, then feed remaining
+                  const feedBase = afterDiscard  // water and flour match this amount
                   return (
                     <div style={{flex:'1 1 100%',marginTop:'.5rem'}}>
                       <div style={{background:'#3a2a15',border:'2px solid #5a4030',padding:'1rem',marginBottom:'.5rem'}}>
