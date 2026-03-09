@@ -522,6 +522,7 @@ export default function Home() {
   const [obs, setObs]                   = useState('')
   const [note, setNote]                 = useState('')
   const [starterWeight, setStarterWeight] = useState('')
+  const [jarTotalWeight, setJarTotalWeight] = useState('')
   const [timeStr, setTimeStr]           = useState('')
   const [toast, setToast]               = useState('')
   const [loading, setLoading]           = useState(true)
@@ -714,7 +715,7 @@ export default function Home() {
     }
     const { data: newEntries } = await supabase.from('entries').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(15)
     setEntries(newEntries||[]); calcStreak(newEntries||[])
-    setObs(''); setNote(''); setStarterWeight('')
+    setObs(''); setNote(''); setStarterWeight(''); setJarTotalWeight('')
     const feedbacks = { 'no-activity':'No activity yet — more time needed.', ready:'🎉 Ready to bake!', rising:'Rising well — check back soon!', peaked:'Perfect timing!', liquid:'Hooch is fine — stir it in and feed!' }
     showToast(feedbacks[obs] || ['Logged! 🌾','Nice work!','Tracking!','Great care!'][Math.floor(Math.random()*4)])
     setSaving(false)
@@ -823,12 +824,102 @@ export default function Home() {
                   <label>Time done</label>
                   <input type="time" value={timeStr} onChange={e => setTimeStr(e.target.value)} />
                 </div>
-                {hasWeight && (
-                  <div className="field">
-                    <label>Starter weight (g)</label>
-                    <input type="number" placeholder="e.g. 50" value={starterWeight} onChange={e => setStarterWeight(e.target.value)} min="1" max="2000" />
-                  </div>
-                )}
+                {hasWeight && (() => {
+                  const JAR_TARE = 363 // mason jar without lid
+                  const jarTotal = parseFloat(jarTotalWeight)
+                  const computed = !isNaN(jarTotal) && jarTotal > JAR_TARE ? Math.round(jarTotal - JAR_TARE) : null
+                  // Keep starterWeight in sync with computed value
+                  if (computed !== null && String(computed) !== starterWeight) {
+                    setTimeout(() => setStarterWeight(String(computed)), 0)
+                  }
+                  const half     = computed ? Math.round(computed / 2) : null
+                  const isNoDiscard = currentStepData.title.toLowerCase().includes('no discard')
+                  const isDiscard   = !isNoDiscard && currentStepData.title.toLowerCase().includes('discard')
+                  const isFeed      = currentStepData.title.toLowerCase().includes('feed') || currentStepData.title.toLowerCase().includes('revive')
+                  // For normal feed: discard half first, then feed the remaining
+                  // For NO discard feed: feed based on full starter weight
+                  const afterDiscard = isNoDiscard ? computed : (computed && half ? computed - half : null)
+                  const feedBase     = afterDiscard  // water and flour match this amount
+                  return (
+                    <div style={{flex:'1 1 100%',marginTop:'.5rem'}}>
+                      <div style={{background:'#3a2a15',border:'2px solid #5a4030',padding:'1rem',marginBottom:'.5rem'}}>
+                        <div style={{fontSize:'.62rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)',marginBottom:'.5rem'}}>⚖️ Jar calculator — mason jar without lid (363g)</div>
+                        <div style={{display:'flex',gap:'.8rem',alignItems:'flex-end',flexWrap:'wrap'}}>
+                          <div className="field">
+                            <label>Total weight on scale (g)</label>
+                            <input
+                              type="number" placeholder="e.g. 450"
+                              value={jarTotalWeight}
+                              onChange={e => setJarTotalWeight(e.target.value)}
+                              min="364" max="5000"
+                              style={{width:'130px'}}
+                            />
+                          </div>
+                          {computed !== null && (
+                            <div style={{display:'flex',gap:'1.2rem',flexWrap:'wrap',paddingBottom:'.4rem'}}>
+                              <div>
+                                <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Starter</div>
+                                <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--gold)'}}>{computed}g</div>
+                              </div>
+                              {/* Normal discard + feed steps */}
+                              {!isNoDiscard && (isDiscard || isFeed) && half !== null && (
+                                <>
+                                  <div style={{color:'var(--mid)',alignSelf:'center'}}>→</div>
+                                  <div>
+                                    <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Discard</div>
+                                    <div style={{fontSize:'1.3rem',fontWeight:700,color:'#b84c2a'}}>{half}g</div>
+                                  </div>
+                                  <div>
+                                    <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Remaining</div>
+                                    <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--cream)'}}>{afterDiscard}g</div>
+                                  </div>
+                                  {isFeed && feedBase && (
+                                    <>
+                                      <div style={{color:'var(--mid)',alignSelf:'center'}}>→ add</div>
+                                      <div>
+                                        <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Water</div>
+                                        <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--gold)'}}>{feedBase}g</div>
+                                      </div>
+                                      <div>
+                                        <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Flour</div>
+                                        <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--gold)'}}>{feedBase}g</div>
+                                      </div>
+                                      <div>
+                                        <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Total</div>
+                                        <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--cream)'}}>{feedBase * 3}g</div>
+                                      </div>
+                                    </>
+                                  )}
+                                </>
+                              )}
+                              {/* NO discard feed — add equal water + flour to full starter */}
+                              {isNoDiscard && isFeed && feedBase && (
+                                <>
+                                  <div style={{color:'var(--mid)',alignSelf:'center'}}>→ no discard, add</div>
+                                  <div>
+                                    <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Water</div>
+                                    <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--gold)'}}>{feedBase}g</div>
+                                  </div>
+                                  <div>
+                                    <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Flour</div>
+                                    <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--gold)'}}>{feedBase}g</div>
+                                  </div>
+                                  <div>
+                                    <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Total</div>
+                                    <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--cream)'}}>{feedBase * 3}g</div>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
+                          {jarTotalWeight && (isNaN(jarTotal) || jarTotal <= JAR_TARE) ? (
+                            <div style={{fontSize:'.72rem',color:'#ffaaaa'}}>⚠️ Must be more than 363g (jar weight)</div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
                 {isObsStep && (
                   <div className="field">
                     <label>What did you observe?</label>
