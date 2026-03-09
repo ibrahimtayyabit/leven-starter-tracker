@@ -544,7 +544,7 @@ export default function Home() {
     setLoading(true)
     const { data } = await supabase
       .from('users')
-      .select('*, entries(mode, step_index, step_title, observation, note, amounts, logged_time, created_at, email_sent)')
+      .select('*, entries(mode, step_index, step_title, observation, note, amounts, logged_time, logged_at, created_at, email_sent)')
       .eq('id', uid)
       .order('created_at', { foreignTable: 'entries', ascending: false })
       .limit(20, { foreignTable: 'entries' })
@@ -702,6 +702,7 @@ export default function Home() {
       <nav className="tab-nav">
         <button className={`tab-btn${tab==='tracker'?' active':''}`} onClick={() => setTab('tracker')}>🌾 Starter Tracker</button>
         <button className={`tab-btn${tab==='recipes'?' active':''}`} onClick={() => setTab('recipes')}>📖 Recipes</button>
+        <button className={`tab-btn${tab==='jar'?' active':''}`} onClick={() => setTab('jar')}>⚖️ Jar Weight</button>
       </nav>
 
       {/* ══ TRACKER TAB ══ */}
@@ -742,7 +743,7 @@ export default function Home() {
             <>
               <div className="sec-label">{currentMode.label} — Steps</div>
               {currentMode.steps.map((step, i) => (
-                <div key={i} className={`step-card${i===currentStep?' active':i<currentStep?' done':' future'}`}>
+                <div key={i} className={`step-card${!loading && i===currentStep?' active':!loading && i<currentStep?' done':' future'}`}>
                   <div className="step-num">Step {i+1} of {currentMode.steps.length}{step.optional && <span style={{fontSize:'.6rem',background:'#b84c2a',color:'white',padding:'1px 5px',marginLeft:6}}>if needed</span>}</div>
                   <div className="step-title">{step.title}</div>
                   <div className="step-desc">{step.desc}</div>
@@ -832,6 +833,9 @@ export default function Home() {
         </main>
       )}
 
+      {/* ══ JAR WEIGHT TAB ══ */}
+      {tab === 'jar' && <JarWeightTab />}
+
       {/* ══ RECIPES TAB ══ */}
       {tab === 'recipes' && (
         <main className="page">
@@ -905,7 +909,8 @@ function TimerCard({ entries, mode }) {
 
   const [minH, maxH] = step.checkWindow
   const midH     = (minH + maxH) / 2
-  const elapsed  = (now - new Date(last.created_at).getTime()) / 3600000
+  const refTime  = last.logged_at || last.created_at
+  const elapsed  = (now - new Date(refTime).getTime()) / 3600000
   const remaining = maxH - elapsed
   const pct      = Math.min(100, (elapsed / maxH) * 100)
 
@@ -946,4 +951,117 @@ function Advice({ mode }) {
   const t = tips[mode]
   if (!t) return null
   return <div className="advice"><strong>{t.title}</strong>{t.text}</div>
+}
+
+// ─── Jar Weight Tab ───────────────────────────────────────────────────────────
+function JarWeightTab() {
+  const [totalWeight, setTotalWeight] = useState('')
+  const [selectedJar, setSelectedJar] = useState('with-lid')
+
+  const JARS = {
+    'with-lid':    { label: 'Mason jar with lid',    weight: 380 },
+    'without-lid': { label: 'Mason jar without lid', weight: 363 },
+  }
+
+  const jar = JARS[selectedJar]
+  const total = parseFloat(totalWeight)
+  const starterWeight = !isNaN(total) && total > jar.weight ? (total - jar.weight) : null
+  const feedAmount = starterWeight ? Math.round(starterWeight) : null
+
+  return (
+    <main className="page">
+      <div className="r-intro">
+        <h2>⚖️ Mason Jar Weights</h2>
+        <p>Use this to find out how much starter you have without removing it from the jar. Weigh your jar on a scale, enter the total below, and we'll subtract the jar weight for you.</p>
+      </div>
+
+      {/* Reference cards */}
+      <div className="sec-label">Jar reference weights</div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.8rem',marginBottom:'1.5rem'}}>
+        <div style={{background:'var(--warm)',border:'2px solid var(--tan)',padding:'1.2rem',textAlign:'center'}}>
+          <div style={{fontSize:'1.8rem',marginBottom:'.4rem'}}>🫙</div>
+          <div style={{fontFamily:'Playfair Display,serif',fontSize:'1.1rem',fontWeight:700,marginBottom:'.3rem'}}>Without lid</div>
+          <div style={{fontSize:'1.6rem',fontWeight:700,color:'var(--brown)',fontFamily:'Courier Prime,monospace'}}>363g</div>
+        </div>
+        <div style={{background:'var(--warm)',border:'2px solid var(--tan)',padding:'1.2rem',textAlign:'center'}}>
+          <div style={{fontSize:'1.8rem',marginBottom:'.4rem'}}>🫙</div>
+          <div style={{fontFamily:'Playfair Display,serif',fontSize:'1.1rem',fontWeight:700,marginBottom:'.3rem'}}>With lid</div>
+          <div style={{fontSize:'1.6rem',fontWeight:700,color:'var(--brown)',fontFamily:'Courier Prime,monospace'}}>380g</div>
+        </div>
+      </div>
+
+      {/* Calculator */}
+      <div className="sec-label">Starter weight calculator</div>
+      <div style={{background:'var(--dark)',color:'var(--cream)',padding:'1.4rem',borderLeft:'4px solid var(--gold)',marginBottom:'1.5rem'}}>
+        <h3 style={{fontFamily:'Playfair Display,serif',fontSize:'1.1rem',marginBottom:'1rem'}}>How much starter do I have?</h3>
+
+        <div style={{display:'flex',gap:'.8rem',flexWrap:'wrap',marginBottom:'1rem',alignItems:'flex-end'}}>
+          <div className="field">
+            <label>Jar type</label>
+            <select
+              value={selectedJar}
+              onChange={e => setSelectedJar(e.target.value)}
+              style={{background:'#3a2a15',border:'2px solid #5a4030',color:'var(--cream)',padding:'.5rem .7rem',fontFamily:'Courier Prime,monospace',fontSize:'.85rem',minWidth:'160px'}}
+            >
+              <option value="with-lid">With lid (380g)</option>
+              <option value="without-lid">Without lid (363g)</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Total weight on scale (g)</label>
+            <input
+              type="number"
+              placeholder="e.g. 450"
+              value={totalWeight}
+              onChange={e => setTotalWeight(e.target.value)}
+              min="1"
+              style={{background:'#3a2a15',border:'2px solid #5a4030',color:'var(--cream)',padding:'.5rem .7rem',fontFamily:'Courier Prime,monospace',fontSize:'.85rem',width:'140px',outline:'none'}}
+            />
+          </div>
+        </div>
+
+        {starterWeight !== null ? (
+          <div style={{background:'#3a2a15',border:'2px solid var(--gold)',padding:'1rem 1.2rem'}}>
+            <div style={{fontSize:'.62rem',letterSpacing:'.15em',textTransform:'uppercase',color:'var(--gold)',marginBottom:'.4rem'}}>You have</div>
+            <div style={{fontFamily:'Playfair Display,serif',fontSize:'2rem',fontWeight:700,color:'var(--cream)',marginBottom:'.3rem'}}>{starterWeight}g of starter</div>
+            <div style={{fontSize:'.75rem',color:'#9e8060',lineHeight:1.6}}>
+              {total}g total − {jar.weight}g ({jar.label}) = <strong style={{color:'var(--cream)'}}>{starterWeight}g starter</strong>
+            </div>
+            <div style={{marginTop:'1rem',borderTop:'1px solid #5a4030',paddingTop:'.8rem'}}>
+              <div style={{fontSize:'.62rem',letterSpacing:'.15em',textTransform:'uppercase',color:'var(--mid)',marginBottom:'.5rem'}}>For a 1:1:1 feed add</div>
+              <div style={{display:'flex',gap:'1rem',flexWrap:'wrap'}}>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontSize:'1.2rem',fontWeight:700,color:'var(--gold)'}}>{feedAmount}g</div>
+                  <div style={{fontSize:'.65rem',color:'var(--mid)',textTransform:'uppercase',letterSpacing:'.1em'}}>water</div>
+                </div>
+                <div style={{color:'var(--mid)',alignSelf:'center',fontSize:'1rem'}}>+</div>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontSize:'1.2rem',fontWeight:700,color:'var(--gold)'}}>{feedAmount}g</div>
+                  <div style={{fontSize:'.65rem',color:'var(--mid)',textTransform:'uppercase',letterSpacing:'.1em'}}>flour</div>
+                </div>
+                <div style={{color:'var(--mid)',alignSelf:'center',fontSize:'1rem'}}>=</div>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontSize:'1.2rem',fontWeight:700,color:'var(--cream)'}}>{starterWeight + feedAmount * 2}g</div>
+                  <div style={{fontSize:'.65rem',color:'var(--mid)',textTransform:'uppercase',letterSpacing:'.1em'}}>total</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : totalWeight && !isNaN(total) ? (
+          <div style={{background:'#3a2a15',border:'2px solid var(--rust)',padding:'.8rem 1rem',fontSize:'.8rem',color:'#ffaaaa'}}>
+            ⚠️ Total weight ({total}g) is less than or equal to the jar weight ({jar.weight}g) — check your scale reading.
+          </div>
+        ) : (
+          <div style={{fontSize:'.75rem',color:'var(--mid)',fontStyle:'italic'}}>
+            Enter the total weight shown on your scale above ↑
+          </div>
+        )}
+      </div>
+
+      <div className="advice">
+        <strong>💡 Tip</strong>
+        Weigh your jar before feeding (with or without lid, just be consistent). Enter that number above and you'll know exactly how much starter you're working with — useful for scaling recipes or making sure you have enough for a bake.
+      </div>
+    </main>
+  )
 }
