@@ -43,7 +43,7 @@ const MODES = {
 }
 
 const MODE_ICONS = { refresh: '🔄', counter: '🍞', fridge: '❄️', longterm: '📦' }
-const OBS_LABELS = { rising: 'Rising 📈', peaked: 'Peaked 🏔️', falling: 'Falling 📉', 'no-activity': 'No activity 😴', liquid: 'Liquid on top 💧', ready: 'Ready to bake! 🎉' }
+const OBS_LABELS = { rising: 'Rising 📈', peaked: 'Peaked 🏔️', falling: 'Falling 📉', 'no-double': 'Didn\'t double 😕', 'no-activity': 'No activity 😴', liquid: 'Liquid on top 💧', ready: 'Ready to bake! 🎉' }
 
 // ─── Recipe data ─────────────────────────────────────────────────────────────
 const RECIPE_SECTIONS = [
@@ -719,7 +719,7 @@ export default function Home() {
     const savedObs = obs
     setObs(''); setNote(''); setStarterWeight(''); setJarTotalWeight('')
     setLastLoggedObs(savedObs || null)
-    const feedbacks = { 'no-activity':'No activity yet — more time needed.', ready:'🎉 Ready to bake!', rising:'Rising well — check back soon!', peaked:'Perfect timing!', liquid:'Hooch is fine — stir it in and feed!' }
+    const feedbacks = { 'no-activity':'No activity yet — more time needed.', 'no-double':'Didn\'t double — check the troubleshooting guide.', ready:'🎉 Ready to bake!', rising:'Rising well — check back soon!', peaked:'Perfect timing!', liquid:'Hooch is fine — stir it in and feed!' }
     showToast(feedbacks[savedObs] || ['Logged! 🌾','Nice work!','Tracking!','Great care!'][Math.floor(Math.random()*4)])
     setSaving(false)
   }
@@ -866,44 +866,37 @@ export default function Home() {
                                 <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--gold)'}}>{computed}g</div>
                               </div>
                               {/* Normal discard + feed steps */}
-                              {!isNoDiscard && (isDiscard || isFeed) && half !== null && (
-                                <>
-                                  <div style={{color:'var(--mid)',alignSelf:'center'}}>→</div>
-                                  <div>
-                                    <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Discard</div>
-                                    <div style={{fontSize:'1.3rem',fontWeight:700,color:'#b84c2a'}}>{half}g</div>
-                                  </div>
-                                  <div>
-                                    <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Remaining</div>
-                                    <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--cream)'}}>{afterDiscard}g</div>
-                                  </div>
-                                  {isFeed && feedBase && (() => {
-                                    const afterDiscardOnScale = jarTotal - half  // scale reads this after discarding
-                                    const waterTarget = afterDiscardOnScale + feedBase  // scale target after adding water
-                                    const flourTarget = waterTarget + feedBase           // scale target after adding flour
-                                    return (
-                                      <>
-                                        <div style={{color:'var(--mid)',alignSelf:'center',fontSize:'.8rem'}}>→</div>
-                                        <div style={{background:'#2a1e0e',border:'1px solid #5a4030',padding:'.6rem .8rem',display:'flex',flexDirection:'column',gap:'.4rem',minWidth:'160px'}}>
-                                          <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)',marginBottom:'.2rem'}}>Scale targets</div>
-                                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'1rem'}}>
-                                            <span style={{fontSize:'.72rem',color:'#9e8060'}}>After discard</span>
-                                            <span style={{fontSize:'1.1rem',fontWeight:700,color:'var(--cream)'}}>{Math.round(afterDiscardOnScale)}g</span>
-                                          </div>
+                              {!isNoDiscard && (isDiscard || isFeed) && half !== null && (() => {
+                                const afterDiscardOnScale = isDiscard ? Math.round(jarTotal - half) : Math.round(jarTotal)
+                                const waterTarget = afterDiscardOnScale + (feedBase || 0)
+                                const flourTarget = waterTarget + (feedBase || 0)
+                                return (
+                                  <>
+                                    <div style={{color:'var(--mid)',alignSelf:'center'}}>→</div>
+                                    <div style={{background:'#2a1e0e',border:'1px solid #5a4030',padding:'.6rem .8rem',display:'flex',flexDirection:'column',gap:'.4rem',minWidth:'170px'}}>
+                                      <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)',marginBottom:'.2rem'}}>Scale targets</div>
+                                      {isDiscard && (
+                                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'1rem'}}>
+                                          <span style={{fontSize:'.72rem',color:'#b84c2a'}}>discard {half}g →</span>
+                                          <span style={{fontSize:'1.1rem',fontWeight:700,color:'var(--cream)'}}>{afterDiscardOnScale}g</span>
+                                        </div>
+                                      )}
+                                      {isFeed && feedBase && (
+                                        <>
                                           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'1rem'}}>
                                             <span style={{fontSize:'.72rem',color:'var(--gold)'}}>+ {feedBase}g water →</span>
-                                            <span style={{fontSize:'1.1rem',fontWeight:700,color:'var(--gold)'}}>{Math.round(waterTarget)}g</span>
+                                            <span style={{fontSize:'1.1rem',fontWeight:700,color:'var(--gold)'}}>{waterTarget}g</span>
                                           </div>
                                           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'1rem'}}>
                                             <span style={{fontSize:'.72rem',color:'var(--gold)'}}>+ {feedBase}g flour →</span>
-                                            <span style={{fontSize:'1.1rem',fontWeight:700,color:'var(--gold)'}}>{Math.round(flourTarget)}g</span>
+                                            <span style={{fontSize:'1.1rem',fontWeight:700,color:'var(--gold)'}}>{flourTarget}g</span>
                                           </div>
-                                        </div>
-                                      </>
-                                    )
-                                  })()}
-                                </>
-                              )}
+                                        </>
+                                      )}
+                                    </div>
+                                  </>
+                                )
+                              })()}
                               {/* NO discard feed — add equal water + flour to full starter, no discard step */}
                               {isNoDiscard && isFeed && feedBase && (() => {
                                 const waterTarget = jarTotal + feedBase   // jar still has full starter, add water
@@ -947,6 +940,7 @@ export default function Home() {
                       <option value="rising">Rising well (bubbles, dome)</option>
                       <option value="peaked">Peaked / at max rise</option>
                       <option value="falling">Falling / deflating</option>
+                      <option value="no-double">Didn't double</option>
                       <option value="no-activity">No activity yet</option>
                       <option value="liquid">Liquid on top (hooch)</option>
                       <option value="ready">Ready to bake! (2×+ rise)</option>
@@ -968,7 +962,7 @@ export default function Home() {
           )}
 
           {/* Inline feedback after logging */}
-          {lastLoggedObs && ['liquid','no-activity','falling'].includes(lastLoggedObs) && (
+          {lastLoggedObs && ['liquid','no-activity','falling','no-double'].includes(lastLoggedObs) && (
             <InlineFeedback obs={lastLoggedObs} onDismiss={() => setLastLoggedObs(null)} setTab={setTab} />
           )}
 
@@ -1292,6 +1286,20 @@ function InlineFeedback({ obs, onDismiss, setTab }) {
         'Consistent falling before reaching 2× rise = needs more frequent feedings or warmer spot.',
       ],
       action: null,
+    },
+    'no-double': {
+      icon: '😕',
+      title: "Didn't double — here's what to check",
+      color: '#8a6a2a',
+      tips: [
+        'Most common cause: temperature. Below 70°F slows rise significantly — find a warmer spot.',
+        'Give it more time — some starters take 10–12 hrs in cooler kitchens.',
+        'Check your water — chlorinated tap water can inhibit yeast. Try filtered water.',
+        'Try bread flour for a few feedings if you\'ve been using all-purpose.',
+        'If it hasn\'t doubled after 12+ hrs in a warm spot, do a full Starter Refresh.',
+        'Stir in ½ tsp sugar per 100g of starter to give the yeast a short-term boost.',
+      ],
+      action: 'refresh',
     },
   }
 
