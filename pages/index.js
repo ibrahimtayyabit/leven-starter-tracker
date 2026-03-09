@@ -525,6 +525,7 @@ export default function Home() {
   const [jarTotalWeight, setJarTotalWeight] = useState('')
   const [timeStr, setTimeStr]           = useState('')
   const [toast, setToast]               = useState('')
+  const [lastLoggedObs, setLastLoggedObs] = useState(null)
   const [loading, setLoading]           = useState(true)
   const [saving, setSaving]             = useState(false)
   const [showEmailSetup, setShowEmailSetup] = useState(false)
@@ -715,9 +716,11 @@ export default function Home() {
     }
     const { data: newEntries } = await supabase.from('entries').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(15)
     setEntries(newEntries||[]); calcStreak(newEntries||[])
+    const savedObs = obs
     setObs(''); setNote(''); setStarterWeight(''); setJarTotalWeight('')
+    setLastLoggedObs(savedObs || null)
     const feedbacks = { 'no-activity':'No activity yet — more time needed.', ready:'🎉 Ready to bake!', rising:'Rising well — check back soon!', peaked:'Perfect timing!', liquid:'Hooch is fine — stir it in and feed!' }
-    showToast(feedbacks[obs] || ['Logged! 🌾','Nice work!','Tracking!','Great care!'][Math.floor(Math.random()*4)])
+    showToast(feedbacks[savedObs] || ['Logged! 🌾','Nice work!','Tracking!','Great care!'][Math.floor(Math.random()*4)])
     setSaving(false)
   }
 
@@ -766,6 +769,7 @@ export default function Home() {
         <button className={`tab-btn${tab==='tracker'?' active':''}`} onClick={() => setTab('tracker')}>🌾 Starter Tracker</button>
         <button className={`tab-btn${tab==='recipes'?' active':''}`} onClick={() => setTab('recipes')}>📖 Recipes</button>
         <button className={`tab-btn${tab==='jar'?' active':''}`} onClick={() => setTab('jar')}>⚖️ Jar Weight</button>
+        <button className={`tab-btn${tab==='troubleshoot'?' active':''}`} onClick={() => setTab('troubleshoot')}>🔧 Troubleshooting</button>
       </nav>
 
       {/* ══ TRACKER TAB ══ */}
@@ -873,43 +877,58 @@ export default function Home() {
                                     <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Remaining</div>
                                     <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--cream)'}}>{afterDiscard}g</div>
                                   </div>
-                                  {isFeed && feedBase && (
-                                    <>
-                                      <div style={{color:'var(--mid)',alignSelf:'center'}}>→ add</div>
-                                      <div>
-                                        <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Water</div>
-                                        <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--gold)'}}>{feedBase}g</div>
-                                      </div>
-                                      <div>
-                                        <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Flour</div>
-                                        <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--gold)'}}>{feedBase}g</div>
-                                      </div>
-                                      <div>
-                                        <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Total</div>
-                                        <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--cream)'}}>{feedBase * 3}g</div>
-                                      </div>
-                                    </>
-                                  )}
+                                  {isFeed && feedBase && (() => {
+                                    const afterDiscardOnScale = jarTotal - half  // scale reads this after discarding
+                                    const waterTarget = afterDiscardOnScale + feedBase  // scale target after adding water
+                                    const flourTarget = waterTarget + feedBase           // scale target after adding flour
+                                    return (
+                                      <>
+                                        <div style={{color:'var(--mid)',alignSelf:'center',fontSize:'.8rem'}}>→</div>
+                                        <div style={{background:'#2a1e0e',border:'1px solid #5a4030',padding:'.6rem .8rem',display:'flex',flexDirection:'column',gap:'.4rem',minWidth:'160px'}}>
+                                          <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)',marginBottom:'.2rem'}}>Scale targets</div>
+                                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'1rem'}}>
+                                            <span style={{fontSize:'.72rem',color:'#9e8060'}}>After discard</span>
+                                            <span style={{fontSize:'1.1rem',fontWeight:700,color:'var(--cream)'}}>{Math.round(afterDiscardOnScale)}g</span>
+                                          </div>
+                                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'1rem'}}>
+                                            <span style={{fontSize:'.72rem',color:'var(--gold)'}}>+ {feedBase}g water →</span>
+                                            <span style={{fontSize:'1.1rem',fontWeight:700,color:'var(--gold)'}}>{Math.round(waterTarget)}g</span>
+                                          </div>
+                                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'1rem'}}>
+                                            <span style={{fontSize:'.72rem',color:'var(--gold)'}}>+ {feedBase}g flour →</span>
+                                            <span style={{fontSize:'1.1rem',fontWeight:700,color:'var(--gold)'}}>{Math.round(flourTarget)}g</span>
+                                          </div>
+                                        </div>
+                                      </>
+                                    )
+                                  })()}
                                 </>
                               )}
-                              {/* NO discard feed — add equal water + flour to full starter */}
-                              {isNoDiscard && isFeed && feedBase && (
-                                <>
-                                  <div style={{color:'var(--mid)',alignSelf:'center'}}>→ no discard, add</div>
-                                  <div>
-                                    <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Water</div>
-                                    <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--gold)'}}>{feedBase}g</div>
-                                  </div>
-                                  <div>
-                                    <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Flour</div>
-                                    <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--gold)'}}>{feedBase}g</div>
-                                  </div>
-                                  <div>
-                                    <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)'}}>Total</div>
-                                    <div style={{fontSize:'1.3rem',fontWeight:700,color:'var(--cream)'}}>{feedBase * 3}g</div>
-                                  </div>
-                                </>
-                              )}
+                              {/* NO discard feed — add equal water + flour to full starter, no discard step */}
+                              {isNoDiscard && isFeed && feedBase && (() => {
+                                const waterTarget = jarTotal + feedBase   // jar still has full starter, add water
+                                const flourTarget = waterTarget + feedBase // then add flour on top
+                                return (
+                                  <>
+                                    <div style={{color:'var(--mid)',alignSelf:'center',fontSize:'.8rem'}}>→ no discard</div>
+                                    <div style={{background:'#2a1e0e',border:'1px solid #5a4030',padding:'.6rem .8rem',display:'flex',flexDirection:'column',gap:'.4rem',minWidth:'160px'}}>
+                                      <div style={{fontSize:'.58rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--mid)',marginBottom:'.2rem'}}>Scale targets</div>
+                                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'1rem'}}>
+                                        <span style={{fontSize:'.72rem',color:'#9e8060'}}>Current</span>
+                                        <span style={{fontSize:'1.1rem',fontWeight:700,color:'var(--cream)'}}>{Math.round(jarTotal)}g</span>
+                                      </div>
+                                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'1rem'}}>
+                                        <span style={{fontSize:'.72rem',color:'var(--gold)'}}>+ {feedBase}g water →</span>
+                                        <span style={{fontSize:'1.1rem',fontWeight:700,color:'var(--gold)'}}>{Math.round(waterTarget)}g</span>
+                                      </div>
+                                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'1rem'}}>
+                                        <span style={{fontSize:'.72rem',color:'var(--gold)'}}>+ {feedBase}g flour →</span>
+                                        <span style={{fontSize:'1.1rem',fontWeight:700,color:'var(--gold)'}}>{Math.round(flourTarget)}g</span>
+                                      </div>
+                                    </div>
+                                  </>
+                                )
+                              })()}
                             </div>
                           )}
                           {jarTotalWeight && (isNaN(jarTotal) || jarTotal <= JAR_TARE) ? (
@@ -945,6 +964,20 @@ export default function Home() {
                   📬 Reminder email scheduled at the {currentStepData.checkWindow[0]}–{currentStepData.checkWindow[1]} hr mark
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Inline feedback after logging */}
+          {lastLoggedObs && ['liquid','no-activity','falling'].includes(lastLoggedObs) && (
+            <InlineFeedback obs={lastLoggedObs} onDismiss={() => setLastLoggedObs(null)} setTab={setTab} />
+          )}
+
+          {/* Quick troubleshoot access button */}
+          {!lastLoggedObs && mode && (
+            <div style={{textAlign:'right',marginBottom:'1rem'}}>
+              <button onClick={() => setTab('troubleshoot')} style={{background:'none',border:'1px solid var(--mid)',color:'var(--mid)',padding:'.3rem .8rem',fontFamily:'Courier Prime,monospace',fontSize:'.65rem',letterSpacing:'.1em',textTransform:'uppercase',cursor:'pointer'}}>
+                🔧 Troubleshooting
+              </button>
             </div>
           )}
 
@@ -988,6 +1021,7 @@ export default function Home() {
 
       {/* ══ JAR WEIGHT TAB ══ */}
       <div style={{display: tab === 'jar' ? 'block' : 'none'}}><JarWeightTab /></div>
+      <div style={{display: tab === 'troubleshoot' ? 'block' : 'none'}}><TroubleshootTab setTab={setTab} /></div>
 
       {/* ══ RECIPES TAB ══ */}
       <div style={{display: tab === 'recipes' ? 'block' : 'none'}}>
@@ -1214,6 +1248,197 @@ function JarWeightTab() {
       <div className="advice">
         <strong>💡 Tip</strong>
         Weigh your jar before feeding (with or without lid, just be consistent). Enter that number above and you'll know exactly how much starter you're working with — useful for scaling recipes or making sure you have enough for a bake.
+      </div>
+    </main>
+  )
+}
+
+// ─── Inline Feedback Component ────────────────────────────────────────────────
+function InlineFeedback({ obs, onDismiss, setTab }) {
+  const feedback = {
+    liquid: {
+      icon: '💧',
+      title: 'Hooch (liquid on top) — totally normal',
+      color: '#4a7c9e',
+      tips: [
+        'Safe to stir back in or pour off — either is fine.',
+        'Hooch = your starter is hungry. Feed it soon.',
+        'If it\'s very sour-smelling, do a full Starter Refresh.',
+        'Happens more in warm weather or if feeding intervals are too long.',
+      ],
+      action: null,
+    },
+    'no-activity': {
+      icon: '😴',
+      title: 'No activity — let\'s troubleshoot',
+      color: '#b84c2a',
+      tips: [
+        'Give it more time — some starters take 8–12 hrs in cooler kitchens.',
+        'Check your kitchen temperature (see guide below).',
+        'Try a Starter Refresh — two feedings without discarding often wakes it up.',
+        'Stir in ½ tsp sugar per 100g of starter to boost yeast activity.',
+        'Switch to bread flour for a few feedings if using all-purpose.',
+      ],
+      action: 'refresh',
+    },
+    falling: {
+      icon: '📉',
+      title: 'Starter is falling — time to act',
+      color: '#7a5c3a',
+      tips: [
+        'Falling = it has peaked and is now past its window. Feed it now if you haven\'t.',
+        'If you needed it for baking, it may still work but activity is declining.',
+        'For daily feeding: discard half and feed 1:1:1 right away.',
+        'Consistent falling before reaching 2× rise = needs more frequent feedings or warmer spot.',
+      ],
+      action: null,
+    },
+  }
+
+  const f = feedback[obs]
+  if (!f) return null
+
+  return (
+    <div style={{background:'var(--warm)',border:`2px solid ${f.color}`,borderLeft:`4px solid ${f.color}`,padding:'1.2rem 1.5rem',marginBottom:'1.5rem',position:'relative'}}>
+      <button onClick={onDismiss} style={{position:'absolute',top:'.6rem',right:'.8rem',background:'none',border:'none',color:'var(--mid)',cursor:'pointer',fontSize:'1rem',lineHeight:1}}>✕</button>
+      <div style={{fontFamily:'Playfair Display,serif',fontSize:'1rem',fontWeight:700,marginBottom:'.8rem',color:'var(--dark)'}}>
+        {f.icon} {f.title}
+      </div>
+      <ul style={{listStyle:'none',margin:'0 0 .8rem',padding:0}}>
+        {f.tips.map((tip, i) => (
+          <li key={i} style={{fontSize:'.78rem',lineHeight:1.6,padding:'.25rem 0',borderBottom:'1px solid var(--tan)',display:'flex',gap:'.6rem'}}>
+            <span style={{color:f.color,flexShrink:0}}>→</span>{tip}
+          </li>
+        ))}
+      </ul>
+      <div style={{display:'flex',gap:'.8rem',flexWrap:'wrap',marginTop:'.6rem'}}>
+        {f.action === 'refresh' && (
+          <span style={{fontSize:'.68rem',background:'var(--brown)',color:'var(--cream)',padding:'.3rem .7rem',cursor:'pointer',letterSpacing:'.08em'}}
+            onClick={() => { onDismiss(); }}>
+            → Switch to Starter Refresh mode
+          </span>
+        )}
+        <span style={{fontSize:'.68rem',background:'none',border:'1px solid var(--mid)',color:'var(--mid)',padding:'.3rem .7rem',cursor:'pointer',letterSpacing:'.08em'}}
+          onClick={() => { onDismiss(); setTab('troubleshoot'); }}>
+          Full troubleshooting guide →
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Troubleshoot Tab ─────────────────────────────────────────────────────────
+function TroubleshootTab({ setTab }) {
+  const [open, setOpen] = useState(null)
+
+  const items = [
+    {
+      id: 'hooch',
+      icon: '💧',
+      title: 'Liquid on top of starter (hooch)?',
+      body: `
+        <p>If you see liquid — also called hooch — developing on top of the starter, it's safe. You can stir it back in or pour it off, then proceed with feeding as normal.</p>
+        <p>Hooch means your starter is hungry. If it's very sour-smelling or you've been neglecting it for a while, do a full <strong>Starter Refresh</strong> rather than a regular feed.</p>
+      `
+    },
+    {
+      id: 'slow',
+      icon: '😴',
+      title: 'Activity slowing down or trouble getting started?',
+      body: `
+        <p>You've been feeding your starter but it's not getting active like it used to — or you're rehydrating and it's not responding. A <strong>Starter Refresh</strong> can help immensely. Putting it in a clean container while thoroughly cleaning the old one also helps.</p>
+        <p>Check the temperature in your home — this is the most common cause:</p>
+        <ul>
+          <li><strong>Under 60°F</strong> — Feed once or twice a day. Activity will be slow.</li>
+          <li><strong>60–70°F</strong> — Feed at least twice a day, up to three times if needed.</li>
+          <li><strong>70–80°F</strong> — Feed three to four times a day. Most active range.</li>
+          <li><strong>Over 80°F</strong> — Activity slows again. Move to a cooler spot if possible. Feed at least 4× a day.</li>
+        </ul>
+        <p>If that's too much feeding, move it to the fridge (feed once or twice a week). If activity slows after fridge storage, feed more frequently for a few days to wake it back up.</p>
+        <p>Last resort: stir in ½ tsp sugar per 100g of starter, switch to bread flour for a few feedings, and keep it on the counter in a warm spot for a few days.</p>
+      `
+    },
+    {
+      id: 'discolor',
+      icon: '🎨',
+      title: 'Discoloration?',
+      body: `
+        <p>If you see <strong>mold</strong> (fuzzy growth, unusual colors like pink, orange, or black) after storing too long without feeding — do not continue using the starter. Reach out to Sarver Farms and we can send you another for a discount. Mold is the one thing a Starter Refresh will not fix.</p>
+        <p>Other discolorations can happen from not feeding enough. Gray or dark streaks are usually just oxidation and are fine — stir them in and feed. We're working on getting pictures up as examples.</p>
+      `
+    },
+    {
+      id: 'temp',
+      icon: '🌡️',
+      title: 'Feeding frequency by temperature',
+      body: `
+        <table style="width:100%;border-collapse:collapse;font-size:.78rem;margin-top:.5rem">
+          <thead>
+            <tr style="background:#3a2a15">
+              <th style="padding:.5rem .8rem;text-align:left;color:var(--gold);font-weight:700">Temperature</th>
+              <th style="padding:.5rem .8rem;text-align:left;color:var(--gold);font-weight:700">Feeds per day</th>
+              <th style="padding:.5rem .8rem;text-align:left;color:var(--gold);font-weight:700">Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #3a2a15"><td style="padding:.5rem .8rem">Under 60°F</td><td style="padding:.5rem .8rem">1–2×</td><td style="padding:.5rem .8rem">Slower activity, be patient</td></tr>
+            <tr style="border-bottom:1px solid #3a2a15;background:#2a1e0e"><td style="padding:.5rem .8rem">60–70°F</td><td style="padding:.5rem .8rem">2–3×</td><td style="padding:.5rem .8rem">Good range, watch activity</td></tr>
+            <tr style="border-bottom:1px solid #3a2a15"><td style="padding:.5rem .8rem">70–80°F</td><td style="padding:.5rem .8rem">3–4×</td><td style="padding:.5rem .8rem">Most active, peak baking range</td></tr>
+            <tr style="background:#2a1e0e"><td style="padding:.5rem .8rem">Over 80°F</td><td style="padding:.5rem .8rem">4×+</td><td style="padding:.5rem .8rem">Move to cooler spot if possible</td></tr>
+          </tbody>
+        </table>
+        <p style="margin-top:.8rem">Fridge storage: feed once or twice a week. If activity slows after fridge time, feed more often for a few days on the counter.</p>
+      `
+    },
+    {
+      id: 'contact',
+      icon: '📬',
+      title: 'Nothing is working — contact Sarver Farms',
+      body: `
+        <p>Sarver Farms starter is a buy-once-for-life product. If your starter seems truly dead after going through the Starter Refresh steps — no activity whatsoever after 2–3 refresh cycles — reach out. We'll send you a new one for free or at a discount.</p>
+        <p>Yeast can sometimes get killed through extreme heat, contamination, or other factors outside your control. It's rare but it happens, and we want everyone to have a thriving starter.</p>
+      `
+    },
+  ]
+
+  return (
+    <main className="page">
+      <div className="r-intro">
+        <h2>🔧 Troubleshooting & Common Issues</h2>
+        <p>Something off with your starter? Most issues are easy to fix. Tap any topic below for guidance — or switch to the Starter Tracker and log what you're seeing for a tailored suggestion.</p>
+      </div>
+
+      {/* Quick links */}
+      <div style={{display:'flex',gap:'.5rem',flexWrap:'wrap',marginBottom:'1.5rem'}}>
+        {items.map(item => (
+          <button key={item.id} onClick={() => setOpen(open === item.id ? null : item.id)}
+            style={{background:open===item.id?'var(--brown)':'var(--warm)',border:`2px solid ${open===item.id?'var(--brown)':'var(--tan)'}`,color:open===item.id?'var(--cream)':'var(--dark)',padding:'.4rem .9rem',fontFamily:'Courier Prime,monospace',fontSize:'.68rem',letterSpacing:'.08em',cursor:'pointer',transition:'all .2s'}}>
+            {item.icon} {item.title.split('?')[0].split('(')[0].trim()}
+          </button>
+        ))}
+      </div>
+
+      {/* Accordion items */}
+      {items.map(item => (
+        <div key={item.id} style={{background:'var(--warm)',border:`2px solid ${open===item.id?'var(--brown)':'var(--tan)'}`,marginBottom:'.6rem',transition:'border-color .2s'}}>
+          <div onClick={() => setOpen(open === item.id ? null : item.id)}
+            style={{padding:'1rem 1.2rem',display:'flex',alignItems:'center',gap:'1rem',cursor:'pointer'}}>
+            <span style={{fontSize:'1.3rem',flexShrink:0}}>{item.icon}</span>
+            <span style={{fontFamily:'Playfair Display,serif',fontSize:'1rem',fontWeight:700,flex:1}}>{item.title}</span>
+            <span style={{color:'var(--mid)',fontSize:'.8rem',transition:'transform .2s',transform:open===item.id?'rotate(90deg)':'none'}}>▶</span>
+          </div>
+          {open === item.id && (
+            <div style={{padding:'0 1.2rem 1.2rem',borderTop:'1px solid var(--tan)',fontSize:'.8rem',lineHeight:1.7,color:'#5a4030'}}
+              dangerouslySetInnerHTML={{__html: item.body}} />
+          )}
+        </div>
+      ))}
+
+      <div style={{textAlign:'center',marginTop:'1.5rem'}}>
+        <button onClick={() => setTab('tracker')}
+          style={{background:'var(--brown)',color:'var(--cream)',border:'none',padding:'.6rem 1.4rem',fontFamily:'Courier Prime,monospace',fontSize:'.8rem',letterSpacing:'.1em',textTransform:'uppercase',cursor:'pointer'}}>
+          ← Back to Starter Tracker
+        </button>
       </div>
     </main>
   )
