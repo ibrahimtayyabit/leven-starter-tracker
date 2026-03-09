@@ -588,7 +588,7 @@ export default function Home() {
           setUserId(existing.id)
           setEmail(existing.email)
           setMode(existing.current_mode)
-          setCurrentStep(existing.current_step || 0)
+          setCurrentStep(existing.current_step ?? 0)
           setShowEmailSetup(false)
           showToast('Welcome back! Your data has been restored 🌾')
           setSaving(false)
@@ -609,7 +609,7 @@ export default function Home() {
   }
 
   async function selectMode(m) {
-    const newStep = mode !== m ? 0 : currentStep
+    const newStep = mode !== m ? 0 : (currentStep ?? 0)
     setMode(m); setCurrentStep(newStep)
     if (userId) await supabase.from('users').update({ current_mode: m, current_step: newStep }).eq('id', userId)
     showToast(MODES[m].label + ' selected')
