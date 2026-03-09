@@ -560,14 +560,32 @@ export default function Home() {
       .limit(20, { foreignTable: 'entries' })
       .single()
     if (data) {
+      const entries = data.entries || []
+
+      // Self-heal: if the most recent log entry is ahead of current_step on the
+      // user record, the user table is stale. Derive the correct step from entries
+      // and write it back so future loads are consistent.
+      let resolvedStep = data.current_step ?? 0
+      if (entries.length > 0) {
+        const lastEntry = entries[0] // ordered descending by created_at
+        if (lastEntry.mode === data.current_mode) {
+          const derivedStep = lastEntry.step_index + 1
+          if (derivedStep > resolvedStep) {
+            resolvedStep = derivedStep
+            // Write the corrected value back to Supabase silently
+            supabase.from('users').update({ current_step: resolvedStep }).eq('id', uid)
+          }
+        }
+      }
+
       ReactDOM.unstable_batchedUpdates(() => {
         setUserId(data.id)
         setEmail(data.email)
         setMode(data.current_mode)
-        setCurrentStep(data.current_step ?? 0)
-        setEntries(data.entries || [])
+        setCurrentStep(resolvedStep)
+        setEntries(entries)
       })
-      calcStreak(data.entries || [])
+      calcStreak(entries)
     } else {
       localStorage.removeItem('leven_uid'); setShowEmailSetup(true)
     }
